@@ -4,36 +4,103 @@ local function getEntityOrNilFromDict(haystack, needle)
             return entity
         end
     end
-
     return nil
 end
 
 local function on_player_selected_area(event)
     if event.item == "wire-box-tool" then
         local playerSettings = settings.get_player_settings(event.player_index)
+        local entities = event.entities
 
-        for k, entity in pairs(event.entities) do
-            if entity.type == "electric-pole" and entity.neighbours and entity.neighbours.copper then
-                for k, targetEntity in pairs(entity.neighbours.copper) do
-                    -- Ignore entities we're connected to that aren't in our selected entities.
-                    if getEntityOrNilFromDict(event.entities, targetEntity) then
-                        local isBoth = playerSettings["wire-box-tool-mode"].value == "red-green"
-                        local isRed = isBoth or playerSettings["wire-box-tool-mode"].value == "red-only"
-                        local isGreen = isBoth or playerSettings["wire-box-tool-mode"].value == "green-only"
+        -- Sort entities by their position in a left-to-right, top-to-bottom order
+        table.sort(entities, function(a, b)
+            if a.position.y == b.position.y then
+                return a.position.x < b.position.x
+            else
+                return a.position.y < b.position.y
+            end
+        end)
 
-                        if isRed and not getEntityOrNilFromDict(entity.neighbours.red, targetEntity) then
-                            entity.connect_neighbour({wire = defines.wire_type.red, target_entity = targetEntity})
-                        end
+        local lastEntity = nil
 
-                        if isGreen and not getEntityOrNilFromDict(entity.neighbours.green, targetEntity) then
-                            entity.connect_neighbour({wire = defines.wire_type.green, target_entity = targetEntity})
-                        end
+        for i = 1, #entities do
+            local entity = entities[i]
+
+            -- Check if the entity is a container or an electric pole
+            if entity and (entity.type == "electric-pole" or entity.type == "container") then
+                if lastEntity then
+                    local isBoth = playerSettings["wire-box-tool-mode"].value == "red-green"
+                    local isRed = isBoth or playerSettings["wire-box-tool-mode"].value == "red-only"
+                    local isGreen = isBoth or playerSettings["wire-box-tool-mode"].value == "green-only"
+
+                    if isRed then
+                        pcall(function() lastEntity.connect_neighbour({wire = defines.wire_type.red, target_entity = entity}) end)
+                    end
+
+                    if isGreen then
+                        pcall(function() lastEntity.connect_neighbour({wire = defines.wire_type.green, target_entity = entity}) end)
                     end
                 end
+
+                -- The current entity becomes the last entity for the next iteration
+                lastEntity = entity
             end
         end
     end
 end
 
+local function on_player_alt_selected_area(event)
+    game.print("Alt mode activated")  -- This will print to the screen when alt mode is activated
+
+    if event.item == "wire-box-tool" then
+        local playerSettings = settings.get_player_settings(event.player_index)
+        local entities = event.entities
+
+        -- Sort entities by their position in a left-to-right, top-to-bottom order
+        table.sort(entities, function(a, b)
+            if a.position.y == b.position.y then
+                return a.position.x < b.position.x
+            else
+                return a.position.y < b.position.y
+            end
+        end)
+
+        local lastEntity = nil
+
+        for i = 1, #entities do
+            local entity = entities[i]
+
+            -- Check if the entity is a container
+            if entity and entity.type == "container" then
+                if lastEntity then
+                    local isBoth = playerSettings["wire-box-tool-mode"].value == "red-green"
+                    local isRed = isBoth or playerSettings["wire-box-tool-mode"].value == "red-only"
+                    local isGreen = isBoth or playerSettings["wire-box-tool-mode"].value == "green-only"
+
+                    if isRed then
+                        pcall(function() lastEntity.connect_neighbour({wire = defines.wire_type.red, target_entity = entity}) end)
+                    end
+
+                    if isGreen then
+                        pcall(function() lastEntity.connect_neighbour({wire = defines.wire_type.green, target_entity = entity}) end)
+                    end
+                end
+
+                -- The current entity becomes the last entity for the next iteration
+                lastEntity = entity
+            end
+        end
+    end
+end
+
+function tableContains(table, element)
+  for _, value in pairs(table) do
+    if value == element then
+      return true
+    end
+  end
+  return false
+end
+
 script.on_event(defines.events.on_player_selected_area, on_player_selected_area)
-script.on_event(defines.events.on_player_alt_selected_area, on_player_selected_area)
+script.on_event(defines.events.on_player_alt_selected_area, on_player_alt_selected_area)
